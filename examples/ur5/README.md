@@ -1,5 +1,116 @@
 # UR5 Example
 
+This directory contains tools for collecting demonstration data from a UR5 robot and converting it to LeRobot format for training.
+
+## Requirements
+
+Install the required dependencies:
+
+```bash
+pip install ur_rtde opencv-python h5py numpy
+```
+
+- **ur_rtde**: Real-time communication with Universal Robots
+- **opencv-python**: Camera capture and image processing
+- **h5py**: HDF5 file format for data storage
+
+## Data Collection
+
+### Quick Start
+
+To collect demonstration data from your UR5 robot:
+
+```bash
+# Basic data collection (records current robot state)
+python examples/ur5/ur_record.py --robot-ip 192.168.1.100 --output-dir ./ur5_data --num-episodes 10
+
+# With freedrive teleoperation (kinesthetic teaching)
+python examples/ur5/ur_record.py --robot-ip 192.168.1.100 --use-teleop --output-dir ./ur5_data --num-episodes 10
+
+# With keyboard control
+python examples/ur5/ur_record.py --robot-ip 192.168.1.100 --use-keyboard --output-dir ./ur5_data --num-episodes 10
+
+# With tactile sensors enabled
+python examples/ur5/ur_record.py --robot-ip 192.168.1.100 --use-tactile --output-dir ./ur5_data --num-episodes 10
+
+# Test mode (no hardware required)
+python examples/ur5/ur_record.py --mock --output-dir ./ur5_data --num-episodes 5
+```
+
+### Recorded Data
+
+The script collects:
+- **Images**: `cam_world` (external view) and `cam_wrist` (wrist-mounted camera)
+- **Tactile** (optional): 5 tactile sensor images (`tactile_0` through `tactile_4`)
+- **State**: UR5 joint positions (6 joints) + optional gripper position
+- **Action**: Target joint positions
+
+Data is saved in HDF5 format with the following structure:
+```
+episode_0000.hdf5
+├── observations/
+│   ├── qpos          # Joint positions [T, 6]
+│   ├── qvel          # Joint velocities [T, 6]
+│   ├── effort        # Joint currents/efforts [T, 6]
+│   ├── gripper       # Gripper position [T, 1] (optional)
+│   └── images/
+│       ├── cam_world  # World camera [T, H, W, 3]
+│       ├── cam_wrist  # Wrist camera [T, H, W, 3]
+│       └── tactile_*  # Tactile sensors [T, H, W, 3] (optional)
+├── action            # Actions [T, 6+1] (joints + gripper)
+└── attrs: {num_steps, task, timestamp, control_freq}
+```
+
+### Camera Configuration
+
+Cameras are accessed via OpenCV. You can specify:
+- **Device index**: `0`, `1`, `2`, etc. for USB cameras
+- **URL**: RTSP or HTTP streams (e.g., `rtsp://192.168.1.10:554/stream`)
+
+```bash
+# Using USB cameras (by device index)
+python examples/ur5/ur_record.py --cam-world 0 --cam-wrist 1 --robot-ip 192.168.1.100
+
+# Using IP cameras (by URL)
+python examples/ur5/ur_record.py \
+    --cam-world "rtsp://192.168.1.10:554/stream1" \
+    --cam-wrist "rtsp://192.168.1.11:554/stream1" \
+    --robot-ip 192.168.1.100
+```
+
+### Robot Connection
+
+The script uses `ur_rtde` to communicate with the UR5 robot. Make sure:
+1. The robot is powered on and in Remote Control mode
+2. The robot's IP address is reachable from your computer
+3. The External Control URCap is installed (for real-time control)
+
+```bash
+# Specify robot IP
+python examples/ur5/ur_record.py --robot-ip 192.168.1.100 --output-dir ./ur5_data
+```
+
+## Convert to LeRobot Format
+
+After collecting data, convert it to LeRobot format for training:
+
+```bash
+# Basic conversion
+uv run examples/ur5/convert_ur5_data_to_lerobot.py \
+    --raw-dir ./ur5_data \
+    --repo-id your_username/ur5_dataset \
+    --task "Pick and place task"
+
+# With push to HuggingFace Hub
+uv run examples/ur5/convert_ur5_data_to_lerobot.py \
+    --raw-dir ./ur5_data \
+    --repo-id your_username/ur5_dataset \
+    --task "Pick and place task" \
+    --push-to-hub
+```
+
+## Training Configuration
+
 Below we provide an outline of how to implement the key components mentioned in the "Finetune on your data" section of the [README](../README.md) for finetuning on UR5 datasets.
 
 First, we will define the `UR5Inputs` and `UR5Outputs` classes, which map the UR5 environment to the model and vice versa. Check the corresponding files in `src/openpi/policies/libero_policy.py` for comments explaining each line.
